@@ -1,0 +1,85 @@
+pipeline {
+    // Parameters that user will fill when running the job
+    parameters {
+        string(
+            name: 'GIT_BRANCH',
+            defaultValue: 'main',
+            description: 'Which Git branch to build?'
+        )
+        string(
+            name: 'APP_VERSION',
+            defaultValue: '1.0.0',
+            description: 'What is the application version?'
+        )
+    }
+    
+    // Environment variables - store configuration values
+    environment {
+        BUILD_DIRECTORY = 'build'
+        ARTIFACT_NAME = "myapp-${params.APP_VERSION}.war"
+        MAVEN_HOME = '/usr/share/maven'
+    }
+    
+    stages {
+        // Stage 1: Get code from Git
+        stage('Checkout') {
+            steps {
+                echo "Checking out branch: ${params.GIT_BRANCH}"
+                git branch: params.GIT_BRANCH, 
+                    url: 'https://github.com/your-username/your-repo.git'
+            }
+        }
+        
+        // Stage 2: Compile the code
+        stage('Build') {
+            steps {
+                echo "Building application version: ${params.APP_VERSION}"
+                sh 'mvn clean compile'
+            }
+        }
+        
+        // Stage 3: Run unit tests
+        stage('Unit Testing') {
+            steps {
+                echo "Running unit tests"
+                sh 'mvn test'
+            }
+            post {
+                always {
+                    // Publish test results even if tests fail
+                    junit 'target/surefire-reports/*.xml'
+                }
+            }
+        }
+        
+        // Stage 4: Code quality check
+        stage('Code Quality Check') {
+            steps {
+                echo "Running code quality checks"
+                sh 'mvn sonar:sonar'
+            }
+        }
+        
+        // Stage 5: Package the application
+        stage('Artifact Packaging') {
+            steps {
+                echo "Packaging as: ${ARTIFACT_NAME}"
+                sh 'mvn package'
+                
+                // Save the artifact for later download
+                archiveArtifacts artifacts: 'target/*.war', fingerprint: true
+            }
+        }
+    }
+    
+    // What to show after pipeline finishes
+    post {
+        success {
+            echo "Pipeline completed successfully!"
+            echo "Artifact name: ${ARTIFACT_NAME}"
+        }
+        failure {
+            echo "Pipeline failed!"
+        }
+    }
+}
